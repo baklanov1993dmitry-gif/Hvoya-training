@@ -318,10 +318,20 @@
         <div class="field2"><label>Упражнение</label>
           <button type="button" class="picksel" id="pickbtn" onclick="openPicker()"><span class="ph">Выбрать упражнение</span><span class="ch">▾</span></button></div>
         <div class="field2"><label>Дата</label><input type="hidden" id="l-date"><button type="button" class="picksel" id="l-date-btn" onclick="openDatePicker('l-date')"><span class="ph">Выбрать дату</span><span class="ch">📅</span></button></div>
-        <div class="row">
+        <div id="l-fields-strength" class="row">
           <div><label>Подходы</label><input type="number" inputmode="numeric" id="l-sets" value="3"></div>
           <div><label>Повторы</label><input type="number" inputmode="numeric" id="l-reps" value="8"></div>
           <div><label>Вес, кг</label><input type="number" step="0.5" inputmode="decimal" id="l-weight" placeholder=" "></div>
+        </div>
+        <div id="l-fields-cardio" style="display:none">
+          <div class="row">
+            <div><label>Время (мин)</label><input type="number" inputmode="numeric" id="l-dur" placeholder="20"></div>
+            <div><label>Дистанция (км)</label><input type="number" step="0.1" inputmode="decimal" id="l-dist" placeholder="5.0"></div>
+            <div><label>Пульс</label><input type="number" inputmode="numeric" id="l-hr" placeholder="140"></div>
+          </div>
+        </div>
+        <div id="l-fields-steps" style="display:none">
+          <div class="field2"><label>Шагов</label><input type="number" inputmode="numeric" id="l-steps" placeholder="8000"></div>
         </div>
         <button class="btn primary" style="margin-top:12px" onclick="addLog()">Записать в журнал</button>
       </div>
@@ -387,6 +397,11 @@
           <input type="number" step="0.1" id="prof-weight" placeholder="80" min="30" max="300"></div>
       </div>
       <button class="btn primary" style="margin-top:8px" onclick="saveProfile()">Сохранить профиль</button>
+      <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="h3sub" style="margin-bottom:8px">Динамика веса тела</div>
+        <div class="row"><input type="number" step="0.1" id="wl-weight" placeholder="текущий вес, кг" style="flex:1"><button class="btn ghost" style="flex:0 0 auto" onclick="addWeightLog()">+ Записать</button></div>
+        <div id="weight-log-list" style="margin-top:8px;font-size:13px"></div>
+      </div>
     </div>
     <div class="card">
       <h2><span class="dot"></span>Анализ у нейросети</h2>
@@ -416,7 +431,7 @@
     <div class="card">
       <h2><span class="dot"></span>Выход</h2>
       <p class="sub">Кнопка «назад» теперь тоже спрашивает подтверждение — случайно не закроешь. Это на всякий случай, отдельной кнопкой.</p>
-      <button class="btn ghost" onclick="requestExit()">🚪 Выйти из приложения</button>
+      
     </div>
   </section>
 
@@ -478,22 +493,20 @@ const GROUPS=["Грудь","Спина","Ноги","Плечи","Бицепс","
 const THEMES={
   steel:{name:"Сталь",dark:false,vars:{"--paper":"#e9eef5","--card":"rgba(255,255,255,.9)","--field":"#f7f9fc","--ink":"#16202e","--text":"#26323f","--muted":"#6a7787","--line":"#dde4ee","--line2":"#c7d1de"},tabs:{log:"#2f6fed",machines:"#0d9488",data:"#16a34a",style:"#7c5cff"}},
   chrome:{name:"Хром",dark:false,vars:{"--paper":"#eceef1","--card":"rgba(255,255,255,.92)","--field":"#f8f9fb","--ink":"#1a1f26","--text":"#2a313a","--muted":"#6d7580","--line":"#e0e3e8","--line2":"#cbd0d8"},tabs:{log:"#3f5468",machines:"#557089",data:"#4a7a5a",style:"#6b5b7a"}},
-  sunset:{name:"Закат",dark:false,vars:{"--paper":"#f4efe9","--card":"rgba(255,255,255,.92)","--field":"#fbf7f3","--ink":"#241a12","--text":"#3a2c22","--muted":"#8a7a6a","--line":"#e8ddd0","--line2":"#dacbba"},tabs:{log:"#ff5a2b",machines:"#d1741f",data:"#c0902a",style:"#a0603a"}},
   graphite:{name:"Графит",dark:true,vars:{"--paper":"#10151c","--card":"rgba(28,36,47,.82)","--field":"#0e141b","--ink":"#eef2f7","--text":"#d6dee8","--muted":"#8592a2","--line":"#263140","--line2":"#33404f"},tabs:{log:"#4b8cff",machines:"#22c1c1",data:"#35c46a",style:"#a08bff"}},
   carbon:{name:"Карбон",dark:true,vars:{"--paper":"#14100e","--card":"rgba(38,32,29,.82)","--field":"#120e0c","--ink":"#f6efe9","--text":"#e2d7ce","--muted":"#9a8b80","--line":"#3a2e28","--line2":"#4a3a32"},tabs:{log:"#ff6a3d",machines:"#ffb020",data:"#4ec27a",style:"#d08bff"}},
   mint:{name:"Мята",dark:false,vars:{"--paper":"#e8f5f0","--card":"rgba(255,255,255,.9)","--field":"#f4fbf8","--ink":"#0f2a22","--text":"#1f3d34","--muted":"#5f8078","--line":"#d6ede4","--line2":"#bfe0d4"},tabs:{log:"#0d9488",machines:"#2f6fed",data:"#65a30d",style:"#9333ea"}},
-  midnight:{name:"Полночь",dark:true,vars:{"--paper":"#0d0f1a","--card":"rgba(26,29,46,.82)","--field":"#0b0d16","--ink":"#eef0fb","--text":"#d7dae8","--muted":"#8288a3","--line":"#232640","--line2":"#2f3352"},tabs:{log:"#7c5cff",machines:"#22d3ee",data:"#34d399",style:"#f472b6"}},
-  powder:{name:"Пудра",dark:false,vars:{"--paper":"#f6eef2","--card":"rgba(255,255,255,.92)","--field":"#fdf7fa","--ink":"#2b1f28","--text":"#453640","--muted":"#8a7a85","--line":"#efdfe7","--line2":"#e0c8d4"},tabs:{log:"#e0568c",machines:"#8b5cf6",data:"#22b07d",style:"#e0a415"}}
+  taiga:{name:"Тайга",dark:true,vars:{"--paper":"#0c1410","--card":"rgba(18,28,20,.85)","--field":"#0a120e","--ink":"#e8f5ec","--text":"#cde6d4","--muted":"#7a9e84","--line":"#1e3524","--line2":"#27462e"},tabs:{log:"#3dba6a",machines:"#22c1a0",data:"#89d44a",style:"#4b9fff"}}
 };
 const FONTS={
   system:{name:"Обычный",css:'system-ui,Roboto,Helvetica,Arial,sans-serif',weight:400,stretch:"normal",spacing:"normal"},
   bold:{name:"Жирный",css:'system-ui,Roboto,Helvetica,Arial,sans-serif',weight:800,stretch:"normal",spacing:"normal"},
-  light:{name:"Лёгкий",css:'system-ui,Roboto,Helvetica,Arial,sans-serif',weight:300,stretch:"normal",spacing:"0.03em"},
   condensed:{name:"Компактный",css:'system-ui,Roboto,Helvetica,Arial,sans-serif',weight:600,stretch:"condensed",spacing:"-0.01em"},
   mono:{name:"Моно",css:'ui-monospace,"Roboto Mono","Droid Sans Mono",monospace',weight:500,stretch:"normal",spacing:"normal"},
   serif:{name:"Классика",css:'Georgia,"Noto Serif","Droid Serif",serif',weight:400,stretch:"normal",spacing:"normal"},
-  cursive:{name:"Рукописный",css:'cursive',weight:400,stretch:"normal",spacing:"normal"},
-  fantasy:{name:"Декоративный",css:'fantasy',weight:400,stretch:"normal",spacing:"0.02em"}
+  fantasy:{name:"Декоративный",css:'fantasy',weight:400,stretch:"normal",spacing:"0.02em"},
+  slab:{name:"Слэб",css:'"Rockwell","Courier New",serif',weight:700,stretch:"normal",spacing:"0.01em"},
+  rounded:{name:"Округлый",css:'"Nunito","Varela Round","Comic Sans MS",sans-serif',weight:600,stretch:"normal",spacing:"normal"}
 };
 const POSTER_PRESETS=[["🏋️","штанга"],["🥊","бокс"],["🚴","вело"],["❤️","сердце"],["🔥","огонь"],["💪","мышца"],["🏆","кубок"],["🧘","растяжка"],["⚡","энергия"]];
 const POSTER_ANIM=["lift","punch","ride","heart","fire","flex","sparkle","breathe","bolt"];
@@ -547,7 +560,7 @@ function askConfirm(text,okLabel){return new Promise(resolve=>{
   function onOk(){done(true);} function onCancel(){done(false);}
   ok.addEventListener("click",onOk);cancel.addEventListener("click",onCancel);});}
 
-function loadMeta(){try{const r=localStorage.getItem(KEY);if(r){const p=JSON.parse(r);DB.machines=p.machines||[];DB.logs=p.logs||[];DB.templates=p.templates||[];DB.dayPlans=p.dayPlans||{};DB.dayTimings=p.dayTimings||{};}}catch(e){}
+function loadMeta(){try{const r=localStorage.getItem(KEY);if(r){const p=JSON.parse(r);DB.machines=p.machines||[];DB.logs=p.logs||[];DB.templates=p.templates||[];DB.dayPlans=p.dayPlans||{};DB.dayTimings=p.dayTimings||{};DB.weightLog=p.weightLog||[];}}catch(e){}
   try{const t=localStorage.getItem(TKEY);if(t&&THEMES[t])curTheme=t;}catch(e){}
   try{const fo=localStorage.getItem(FKEY);if(fo&&FONTS[fo])curFont=fo;}catch(e){}
   try{const c=localStorage.getItem(CKEY);if(c)customAccent=c;}catch(e){}
@@ -556,7 +569,8 @@ function loadMeta(){try{const r=localStorage.getItem(KEY);if(r){const p=JSON.par
       const idx=POSTER_PRESETS.findIndex(p=>p[0]===posterChoice[t]);
       posterChoice[t]={em:posterChoice[t],anim:POSTER_ANIM[idx]||"lift"};}}}catch(e){}}
 function savePosterChoice(){try{localStorage.setItem(PKEY,JSON.stringify(posterChoice));}catch(e){}}
-function saveMeta(){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){flash("Память переполнена — сделай бэкап и почисть фото");}}
+let isDirty=false;
+function saveMeta(){try{localStorage.setItem(KEY,JSON.stringify(DB));isDirty=true;}catch(e){flash("Память переполнена — сделай бэкап и почисть фото");}}
 
 let idb=null;
 function idbOpen(){return new Promise(res=>{try{const rq=indexedDB.open("zhelezoImg",1);
@@ -689,9 +703,15 @@ function askExitChoice(){return new Promise(resolve=>{
     ok.removeEventListener("click",onOk);cancel.removeEventListener("click",onCancel);noback.removeEventListener("click",onNo);resolve(v);}
   function onOk(){done("backup");} function onCancel(){done(null);} function onNo(){done("exit");}
   ok.addEventListener("click",onOk);cancel.addEventListener("click",onCancel);noback.addEventListener("click",onNo);});}
-async function requestExit(){const choice=await askExitChoice();
-  if(!choice)return;
-  if(choice==="backup"){try{download(autoBackupName(),JSON.stringify({...DB,images:IMG},null,2),"application/json");}catch(e){}}
+async function requestExit(){
+  if(isDirty){
+    const choice=await askExitChoice();
+    if(!choice)return;
+    if(choice==="backup"){try{download(autoBackupName(),JSON.stringify({...DB,images:IMG},null,2),"application/json");}catch(e){}}
+  } else {
+    const ok=await askConfirm("Выйти из приложения?","Выйти");
+    if(!ok)return;
+  }
   exitArmed=true;history.back();}
 window.addEventListener("popstate",()=>{
   if(viewerOpen){viewerOpen=false;document.getElementById("viewer").classList.remove("on");return;}
@@ -743,7 +763,14 @@ function openToday(){const t=today();
 
 /* ── выбор упражнения ── */
 function updatePickBtn(){const b=document.getElementById("pickbtn");const m=machineById(selMachineId);
-  b.innerHTML=m?`<span>${esc(m.name)}${m.short?` · ${esc(m.short)}`:""}</span><span class="ch">▾</span>`:`<span class="ph">Выбрать упражнение</span><span class="ch">▾</span>`;}
+  b.innerHTML=m?`<span>${esc(m.name)}${m.short?` · ${esc(m.short)}`:""}</span><span class="ch">▾</span>`:`<span class="ph">Выбрать упражнение</span><span class="ch">▾</span>`;
+  const mtype=m&&m.mtype||"strength";
+  const fs=document.getElementById("l-fields-strength");
+  const fc=document.getElementById("l-fields-cardio");
+  const fst=document.getElementById("l-fields-steps");
+  if(fs)fs.style.display=mtype==="strength"?"":"none";
+  if(fc)fc.style.display=mtype==="cardio"?"":"none";
+  if(fst)fst.style.display=mtype==="steps"?"":"none";}
 function openPicker(){if(!DB.machines.length&&!DB.templates.length){openMachine(null);return;}
   const byG={};DB.machines.forEach(m=>{(byG[m.group||"Другое"]=byG[m.group||"Другое"]||[]).push(m);});
   let body="";
@@ -763,6 +790,22 @@ function refreshAddForm(){const none=!DB.machines.length;
   if(!selMachineId&&DB.machines.length)selMachineId=DB.machines[0].id;updatePickBtn();}
 function addLog(){if(!selMachineId){flash("Выбери упражнение");return;}
   const date=document.getElementById("l-date").value||today();
+  const m=machineById(selMachineId);const mtype=m&&m.mtype||"strength";
+  if(mtype==="steps"){
+    const steps=parseInt(document.getElementById("l-steps").value)||0;
+    if(!steps){flash("Введи количество шагов");return;}
+    DB.logs=DB.logs.filter(l=>!(l.machineId===selMachineId&&l.date===date));
+    DB.logs.push({id:uid(),date,machineId:selMachineId,steps,weight:null,reps:null,sets:null});
+    saveMeta();document.getElementById("l-steps").value="";renderLog();renderStatsBody();flash("Записано 💪");return;}
+  if(mtype==="cardio"){
+    const dur=parseInt(document.getElementById("l-dur").value)||null;
+    const dist=parseFloat(document.getElementById("l-dist").value)||null;
+    const hr=parseInt(document.getElementById("l-hr").value)||null;
+    if(!dur&&!dist){flash("Введи время или дистанцию");return;}
+    DB.logs=DB.logs.filter(l=>!(l.machineId===selMachineId&&l.date===date));
+    DB.logs.push({id:uid(),date,machineId:selMachineId,duration:dur,distance:dist,hr,weight:null,reps:null,sets:null});
+    saveMeta();["l-dur","l-dist","l-hr"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+    renderLog();renderStatsBody();flash("Кардио записано 💪");return;}
   const weight=parseFloat(document.getElementById("l-weight").value);if(isNaN(weight)){flash("Введи вес");return;}
   const rr=document.getElementById("l-reps").value,ss=document.getElementById("l-sets").value;
   DB.logs.push({id:uid(),date,machineId:selMachineId,weight,reps:rr===""?null:parseInt(rr),sets:ss===""?null:parseInt(ss)});
@@ -877,9 +920,12 @@ function sparkline(vals){if(vals.length<2)return `<span style="color:var(--muted
 let statsBalanceDays=14;
 function computeBalance(days){days=days||statsBalanceDays;
   const per={};DB.machines.forEach(m=>{const g=m.group||"Другое";if(!per[g])per[g]={sets:0,last:null,ex:{}};});
-  DB.logs.forEach(l=>{const m=machineById(l.machineId);const g=m?(m.group||"Другое"):"Другое";if(!per[g])per[g]={sets:0,last:null,ex:{}};
-    if(daysAgo(l.date)<days)per[g].sets++;if(!per[g].last||l.date>per[g].last)per[g].last=l.date;
-    const nm=m?m.name:"—";if(!per[g].ex[nm]||l.date>per[g].ex[nm])per[g].ex[nm]=l.date;});
+  DB.logs.forEach(l=>{const m=machineById(l.machineId);if(!m)return;
+    const mtype=m.mtype||"strength";if(mtype!=="strength")return;// только силовые в баланс
+    const g=m.group||"Другое";if(!per[g])per[g]={sets:0,last:null,ex:{}};
+    const addSets=l.sets&&l.sets>0?l.sets:1;// сумма подходов или 1 если не указано
+    if(daysAgo(l.date)<days)per[g].sets+=addSets;if(!per[g].last||l.date>per[g].last)per[g].last=l.date;
+    const nm=m.name;if(!per[g].ex[nm]||l.date>per[g].ex[nm])per[g].ex[nm]=l.date;});
   return Object.keys(per).map(g=>({g,...per[g]})).sort((a,b)=>a.sets-b.sets);}
 function setStatsBalanceDays(v){statsBalanceDays=parseInt(v)||14;renderStatsBody();}
 function periodLabel(){return statsBalanceDays===14?"14 дней":statsBalanceDays===30?"30 дней":statsBalanceDays===365?"год":`${statsBalanceDays} дн.`;}
@@ -1147,12 +1193,12 @@ function exportCSV(){const dates=[...new Set(DB.logs.map(l=>l.date))].sort();con
 function exportJSON(){download(`zhelezo_backup_${today()}.json`,JSON.stringify({...DB,images:IMG},null,2),"application/json");flash("Бэкап готов — сохрани копию");}
 async function importJSON(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=async()=>{try{const p=JSON.parse(r.result);if(!(await askConfirm("Заменить текущие данные содержимым бэкапа?","Заменить")))return;
-    DB.machines=p.machines||[];DB.logs=p.logs||[];DB.templates=p.templates||[];DB.dayPlans=p.dayPlans||{};DB.dayTimings=p.dayTimings||{};for(const k in IMG)delete IMG[k];
+    DB.machines=p.machines||[];DB.logs=p.logs||[];DB.templates=p.templates||[];DB.dayPlans=p.dayPlans||{};DB.dayTimings=p.dayTimings||{};DB.weightLog=p.weightLog||[];for(const k in IMG)delete IMG[k];
     const imgs=p.images||{};for(const id in imgs){IMG[id]=imgs[id];await idbPut(id,imgs[id]);}
     saveMeta();applyHero(curTab);refreshAddForm();renderLog();renderStatsBody();renderTemplates();renderMachineList();renderDataSummary();renderPosterMgr();flash("Бэкап загружен");}
     catch(e){flash("Не удалось прочитать файл");}};r.readAsText(f);ev.target.value="";}
 async function wipe(){if(!(await askConfirm("Стереть ВСЁ? Сначала лучше сделать бэкап.","Продолжить")))return;if(!(await askConfirm("Точно стереть без возврата?","Стереть всё")))return;
-  DB.machines=[];DB.logs=[];DB.templates=[];DB.dayPlans={};DB.dayTimings={};selMachineId=null;
+  DB.machines=[];DB.logs=[];DB.templates=[];DB.dayPlans={};DB.dayTimings={};DB.weightLog=[];selMachineId=null;
   for(const id in IMG){if(id.startsWith("__poster_"))continue;await idbDel(id);delete IMG[id];}
   saveMeta();refreshAddForm();renderLog();renderStatsBody();renderTemplates();renderMachineList();renderDataSummary();flash("Всё стёрто");}
 
@@ -1163,11 +1209,25 @@ function saveProfile(){PROF.sex=document.getElementById("prof-sex").value;
   PROF.age=parseInt(document.getElementById("prof-age").value)||null;
   PROF.height=parseInt(document.getElementById("prof-height").value)||null;
   PROF.weight=parseFloat(document.getElementById("prof-weight").value)||null;
-  localStorage.setItem(PROFKEY,JSON.stringify(PROF));flash("Профиль сохранён");}
+  try{localStorage.setItem("mytrain.prof",JSON.stringify(PROF));}catch(e){}
+  flash("Профиль сохранён");}
+function addWeightLog(){const w=parseFloat(document.getElementById("wl-weight").value);
+  if(!w){flash("Введи вес");return;}
+  if(!DB.weightLog)DB.weightLog=[];
+  DB.weightLog.push({date:today(),weight:w});
+  PROF.weight=w;document.getElementById("prof-weight").value=w;
+  try{localStorage.setItem("mytrain.prof",JSON.stringify(PROF));}catch(e){}
+  saveMeta();document.getElementById("wl-weight").value="";renderWeightLog();}
+function renderWeightLog(){const el=document.getElementById("weight-log-list");if(!el)return;
+  const log=(DB.weightLog||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  if(!log.length){el.innerHTML='<p class="sub">Пока нет записей</p>';return;}
+  el.innerHTML=log.map(l=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line2)">
+    <span>${ruDate(l.date)}</span><span style="font-weight:700">${l.weight} кг</span></div>`).join("");}
 function applyProfileUI(){document.getElementById("prof-sex").value=PROF.sex||"m";
   if(PROF.age)document.getElementById("prof-age").value=PROF.age;
   if(PROF.height)document.getElementById("prof-height").value=PROF.height;
-  if(PROF.weight)document.getElementById("prof-weight").value=PROF.weight;}
+  if(PROF.weight)document.getElementById("prof-weight").value=PROF.weight;
+  renderWeightLog();}
 
 /* ── калории ── */
 // BMR по Mifflin-St Jeor
@@ -1190,16 +1250,15 @@ function kcalStrength(minutes,bodyWeight){
   return Math.round(5.0*bw*(minutes/60));// MET~5 силовая
 }
 function kcalSteps(steps){return Math.round(steps*0.04);}// ~0.04 ккал/шаг средний
-function kcalDay(date){// суммарные калории за день
-  const items=DB.logs.filter(l=>l.date===date);const bw=PROF.weight||75;let total=0;
+function kcalDay(date){const items=DB.logs.filter(l=>l.date===date);const bw=PROF.weight||75;let total=0;
   const timing=DB.dayTimings[date];
   const strengthDur=timing&&timing.start&&timing.end?Math.round((new Date(timing.end)-new Date(timing.start))/60000):null;
   let hasStrength=false;
   items.forEach(l=>{const m=machineById(l.machineId);const mtype=m&&m.mtype||"strength";
     if(mtype==="cardio"&&l.duration)total+=kcalCardio(l.duration,l.hr,bw);
     else if(mtype==="steps"&&l.steps)total+=kcalSteps(l.steps);
-    else if(mtype==="strength")hasStrength=true;});
-  if(hasStrength&&strengthDur)total+=kcalStrength(strengthDur,bw);
+    else if(mtype==="strength"&&(l.weight!=null||l.sets!=null))hasStrength=true;});// только реальные записи
+  if(hasStrength&&strengthDur&&strengthDur>0)total+=kcalStrength(strengthDur,bw);
   return total;}
 function kcalDayStr(date){const k=kcalDay(date);if(!k)return"";return ` · ~${k} ккал`;}
 
