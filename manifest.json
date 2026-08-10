@@ -1,6 +1,6 @@
 {
-  "name": "СТАТЬ ЛУЧШЕ — журнал тренировок",
-  "short_name": "СТАТЬ ЛУЧШЕ",
+  "name": "Мои тренировки",
+  "short_name": "Мои тренировки",
   "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",
