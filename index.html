@@ -416,7 +416,7 @@
     <div class="card">
       <h2><span class="dot"></span>Выход</h2>
       <p class="sub">Кнопка «назад» теперь тоже спрашивает подтверждение — случайно не закроешь. Это на всякий случай, отдельной кнопкой.</p>
-      <button class="btn danger" onclick="requestExit()">🚪 Выйти из приложения</button>
+      <button class="btn ghost" onclick="requestExit()">🚪 Выйти из приложения</button>
     </div>
   </section>
 
@@ -672,10 +672,27 @@ function closeViewer(){if(viewerOpen)history.back();else document.getElementById
 let exitArmed=false;
 function pushGuard(){history.pushState({guard:1},"");}
 function autoBackupName(){const d=new Date();const p=n=>String(n).padStart(2,"0");
-  return `zhelezo_backup_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}.json`;}
-async function requestExit(){const ok=await askConfirm("Точно закрыть приложение? Перед выходом сохраню бэкап на устройство.","Закрыть");
-  if(ok){try{download(autoBackupName(),JSON.stringify({...DB,images:IMG},null,2),"application/json");}catch(e){}
-    exitArmed=true;history.back();}else{pushGuard();}}
+  return `mytrain_backup_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}.json`;}
+function askExitChoice(){return new Promise(resolve=>{
+  const ov=document.getElementById("confirm-overlay");
+  document.getElementById("confirm-text").textContent="Выйти из приложения?";
+  const ok=document.getElementById("confirm-ok"),cancel=document.getElementById("confirm-cancel");
+  ok.textContent="Выйти с бэкапом";cancel.textContent="Отмена";
+  // Добавляем третью кнопку
+  let noback=document.getElementById("confirm-noback");
+  if(!noback){noback=document.createElement("button");noback.id="confirm-noback";
+    noback.className="btn ghost";noback.style.cssText="margin-top:8px;width:100%";
+    ok.parentElement.insertBefore(noback,ok);}
+  noback.textContent="Выйти без бэкапа";noback.style.display="";
+  ov.classList.add("on");
+  function done(v){ov.classList.remove("on");cancel.textContent="Отмена";noback.style.display="none";
+    ok.removeEventListener("click",onOk);cancel.removeEventListener("click",onCancel);noback.removeEventListener("click",onNo);resolve(v);}
+  function onOk(){done("backup");} function onCancel(){done(null);} function onNo(){done("exit");}
+  ok.addEventListener("click",onOk);cancel.addEventListener("click",onCancel);noback.addEventListener("click",onNo);});}
+async function requestExit(){const choice=await askExitChoice();
+  if(!choice)return;
+  if(choice==="backup"){try{download(autoBackupName(),JSON.stringify({...DB,images:IMG},null,2),"application/json");}catch(e){}}
+  exitArmed=true;history.back();}
 window.addEventListener("popstate",()=>{
   if(viewerOpen){viewerOpen=false;document.getElementById("viewer").classList.remove("on");return;}
   if(sheetOpen){hideSheet();return;}
@@ -837,7 +854,7 @@ function daySheet(date){const items=DB.logs.filter(l=>l.date===date);const byM={
   }
   const extraBlock=extraIds.length?`${validOrder.length?'<div class="h3sub" style="margin:16px 0 8px">Остальное</div>':""}${extraIds.map(rowHtml).join("")}`:"";
   openSheet(`<div class="grip"></div><div class="shhead"><h3>Тренировка</h3><button class="closeb" onclick="dismiss()">✕</button></div>
-    <div class="h3sub">${ruDate(date)} · ${items.length} подходов${timingStr(date)}</div>
+    <div class="h3sub">${ruDate(date)} · ${items.length} подходов${timingStr(date)}${kcalDayStr(date)}</div>
     <button class="btn ghost mini" style="margin-bottom:8px" onclick="editTiming('${date}')">⏱ Время тренировки</button>
     ${planBlock}${extraBlock}${(!validOrder.length&&!extraIds.length)?'<div class="empty">Нет записей</div>':""}`);}
 
@@ -944,16 +961,28 @@ function renderTemplates(){const box=document.getElementById("template-list");if
       <div class="thumb ph">▤</div><div class="nm">${esc(t.name)}<small>${valid.length} упражнений</small></div></div></div>`;}).join("");}
 let editTemplateId=null,draftTplExercises=[],draftTplData={};
 function renderTplPicklist(){
-  const byG={};DB.machines.forEach(m=>{(byG[m.group||"Другое"]=byG[m.group||"Другое"]||[]).push(m);});
-  let body="";GROUPS.forEach(g=>{if(!byG[g])return;body+=`<div class="pgh">${g}</div>`+byG[g].map(m=>{
-    const idx=draftTplExercises.indexOf(m.id);const selected=idx>=0;
-    const pairLabel=selected?`Пара ${Math.floor(idx/2)+1}${(idx===draftTplExercises.length-1&&draftTplExercises.length%2===1)?" (одиночное)":""}`:"➕";
+  let body="";
+  if(draftTplExercises.length){
+    body+=`<div class="pgh">Выбранные — порядок пар</div>`;
+    for(let i=0;i<draftTplExercises.length;i+=2){
+      const pairNum=i/2+1;const isLast=i===draftTplExercises.length-1&&draftTplExercises.length%2===1;
+      body+=`<div class="pairhead">Пара ${pairNum}${isLast?" (одиночное)":""}</div>`;
+      [draftTplExercises[i],draftTplExercises[i+1]].filter(Boolean).forEach(mid=>{
+        const m=machineById(mid);if(!m)return;
+        const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">&#9636;</div>`;
+        body+=`<div class="pitem" style="cursor:pointer;background:var(--accent-soft);border-color:var(--accent)" onclick="toggleTplExercise('${m.id}')">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">${thumb}<span>${esc(m.name)}</span></div>
+          <span style="color:var(--down);font-weight:800;font-size:18px;flex:0 0 auto">✕</span></div>`;});
+    }
+    body+=`<div class="pgh" style="margin-top:16px">Добавить в шаблон</div>`;
+  }
+  const selSet=new Set(draftTplExercises);
+  const byG={};DB.machines.forEach(m=>{if(!selSet.has(m.id))(byG[m.group||"Другое"]=byG[m.group||"Другое"]||[]).push(m);});
+  GROUPS.forEach(g=>{if(!byG[g])return;body+=`<div class="pgh">${g}</div>`+byG[g].map(m=>{
     const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">&#9636;</div>`;
-    const bg=selected?"background:var(--accent-soft);border-color:var(--accent)":"";
-    return `<div class="pitem" style="cursor:pointer;${bg}" onclick="toggleTplExercise('${m.id}')">
+    return `<div class="pitem" style="cursor:pointer" onclick="toggleTplExercise('${m.id}')">
       <div style="display:flex;align-items:center;gap:10px;min-width:0">${thumb}<span>${esc(m.name)}</span></div>
-      <span style="color:var(--accent);font-weight:800;font-size:12px;flex:0 0 auto;white-space:nowrap">${pairLabel}</span></div>`;
-  }).join("");});
+      <span style="color:var(--accent);font-weight:800;font-size:18px;flex:0 0 auto">➕</span></div>`;}).join("");});
   const el=document.getElementById("tpl-picklist");if(el)el.innerHTML=body;}
 
 function openTemplateEditor(id){editTemplateId=id;const t=id?DB.templates.find(x=>x.id===id):null;
@@ -1000,7 +1029,12 @@ function openTemplateRun(id){const t=DB.templates.find(x=>x.id===id);if(!t)retur
 function applyTemplateNow(id){const t=DB.templates.find(x=>x.id===id);if(!t)return;
   const date=(document.getElementById("tpl-date")||{}).value||today();
   const items=(t.items||[]).filter(it=>machineById(it.exerciseId));
-  items.forEach(it=>{DB.logs.push({id:uid(),date,machineId:it.exerciseId,weight:null,reps:null,sets:null});});
+  const mids=new Set(items.map(it=>it.exerciseId));
+  DB.logs=DB.logs.filter(l=>!(mids.has(l.machineId)&&l.date===date));
+  items.forEach(it=>{
+    const m=machineById(it.exerciseId);const mtype=m&&m.mtype||"strength";
+    if(mtype==="strength")DB.logs.push({id:uid(),date,machineId:it.exerciseId,weight:null,reps:null,sets:null});
+  });
   DB.dayPlans[date]={name:t.name,superset:t.superset,rounds:t.rounds,order:items.map(it=>it.exerciseId)};
   saveMeta();renderLog();renderStatsBody();dismiss();flash(`План записан: ${items.length} упражнений 💪`);}
 
@@ -1047,10 +1081,6 @@ function openMachine(id){editId=id;const m=id?machineById(id):null;draftImgs=m?m
       <div class="field2"><label>Видео</label><div class="videorow"><input id="f-video" value="${m?esc(m.video||""):""}" placeholder="https://..."><button type="button" class="vbtn" onclick="openVideoLink()" title="Открыть видео">▶</button></div></div>
     </div>
     <div class="field2"><label>Техника / примечания</label><textarea id="f-tech" class="tech-lg" placeholder="Вставь описание техники из интернета или свои заметки">${m?esc(m.technique||""):""}</textarea></div>
-    <div class="field2"><label>Тип записи</label><select id="f-mtype">
-      <option value="strength" ${!m||m.mtype!=="cardio"&&m.mtype!=="steps"?"selected":""}>Силовое (вес / повторы / подходы)</option>
-      <option value="cardio" ${m&&m.mtype==="cardio"?"selected":""}>Кардио (время / дистанция / пульс)</option>
-      <option value="steps" ${m&&m.mtype==="steps"?"selected":""}>Шаги (количество шагов)</option></select></div>
     <div class="field2"><label>Тип записи</label><select id="f-mtype">
       <option value="strength" ${!m||!m.mtype||m.mtype==="strength"?"selected":""}>Силовое (вес / повторы / подходы)</option>
       <option value="cardio" ${m&&m.mtype==="cardio"?"selected":""}>Кардио (время / дистанция / пульс)</option>
@@ -1160,6 +1190,18 @@ function kcalStrength(minutes,bodyWeight){
   return Math.round(5.0*bw*(minutes/60));// MET~5 силовая
 }
 function kcalSteps(steps){return Math.round(steps*0.04);}// ~0.04 ккал/шаг средний
+function kcalDay(date){// суммарные калории за день
+  const items=DB.logs.filter(l=>l.date===date);const bw=PROF.weight||75;let total=0;
+  const timing=DB.dayTimings[date];
+  const strengthDur=timing&&timing.start&&timing.end?Math.round((new Date(timing.end)-new Date(timing.start))/60000):null;
+  let hasStrength=false;
+  items.forEach(l=>{const m=machineById(l.machineId);const mtype=m&&m.mtype||"strength";
+    if(mtype==="cardio"&&l.duration)total+=kcalCardio(l.duration,l.hr,bw);
+    else if(mtype==="steps"&&l.steps)total+=kcalSteps(l.steps);
+    else if(mtype==="strength")hasStrength=true;});
+  if(hasStrength&&strengthDur)total+=kcalStrength(strengthDur,bw);
+  return total;}
+function kcalDayStr(date){const k=kcalDay(date);if(!k)return"";return ` · ~${k} ккал`;}
 
 /* ── время тренировки ── */
 function formatDur(sec){const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);
