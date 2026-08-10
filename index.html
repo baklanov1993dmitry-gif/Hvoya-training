@@ -399,7 +399,7 @@
       <button class="btn primary" style="margin-top:8px" onclick="saveProfile()">Сохранить профиль</button>
       <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
         <div class="h3sub" style="margin-bottom:8px">Динамика веса тела</div>
-        <div class="row"><input type="number" step="0.1" id="wl-weight" placeholder="текущий вес, кг" style="flex:1"><button class="btn ghost" style="flex:0 0 auto" onclick="addWeightLog()">+ Записать</button></div>
+        <div class="row"><input type="number" step="0.1" id="wl-weight" placeholder="текущий вес, кг" style="flex:1;min-width:0"><button class="btn ghost" style="flex:0 0 auto;width:auto;white-space:nowrap" onclick="addWeightLog()">+ Записать</button></div>
         <div id="weight-log-list" style="margin-top:8px;font-size:13px"></div>
       </div>
     </div>
@@ -1238,12 +1238,12 @@ function calcBMR(){const w=PROF.weight,h=PROF.height,a=PROF.age,s=PROF.sex;
 function kcalCardio(minutes,avgHr,bodyWeight){
   if(!minutes)return 0;
   const bw=bodyWeight||PROF.weight||75;
-  if(avgHr){// формула Keytel et al (мужчины)
-    const hr=avgHr,t=minutes/60;
+  if(avgHr){// формула Keytel et al — T в минутах, не в часах
+    const hr=avgHr,t=minutes;
     return PROF.sex==="f"
       ?Math.round((-20.4022+0.4472*hr-0.1263*bw+0.074*((PROF.age)||30))*t/4.184)
       :Math.round((-55.0969+0.6309*hr-0.1988*bw+0.2017*((PROF.age)||30))*t/4.184);}
-  return Math.round(5.5*bw*(minutes/60));// MET~5.5 велосипед умеренный
+  return Math.round(5.5*bw*(minutes/60));// MET~5.5 велосипед умеренный (без пульса)
 }
 function kcalStrength(minutes,bodyWeight){
   const bw=bodyWeight||PROF.weight||75;
@@ -1253,12 +1253,16 @@ function kcalSteps(steps){return Math.round(steps*0.04);}// ~0.04 ккал/ша�
 function kcalDay(date){const items=DB.logs.filter(l=>l.date===date);const bw=PROF.weight||75;let total=0;
   const timing=DB.dayTimings[date];
   const strengthDur=timing&&timing.start&&timing.end?Math.round((new Date(timing.end)-new Date(timing.start))/60000):null;
-  let hasStrength=false;
+  let strengthSets=0;
   items.forEach(l=>{const m=machineById(l.machineId);const mtype=m&&m.mtype||"strength";
     if(mtype==="cardio"&&l.duration)total+=kcalCardio(l.duration,l.hr,bw);
     else if(mtype==="steps"&&l.steps)total+=kcalSteps(l.steps);
-    else if(mtype==="strength"&&(l.weight!=null||l.sets!=null))hasStrength=true;});// только реальные записи
-  if(hasStrength&&strengthDur&&strengthDur>0)total+=kcalStrength(strengthDur,bw);
+    else if(mtype==="strength"&&(l.weight!=null||l.sets!=null))strengthSets+=(l.sets&&l.sets>0?l.sets:1);});
+  if(strengthSets){
+    // Если точное время тренировки не указано — оценка ~3 мин на подход (работа+отдых)
+    const dur=strengthDur&&strengthDur>0?strengthDur:strengthSets*3;
+    total+=kcalStrength(dur,bw);
+  }
   return total;}
 function kcalDayStr(date){const k=kcalDay(date);if(!k)return"";return ` · ~${k} ккал`;}
 
