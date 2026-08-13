@@ -37,6 +37,7 @@
   /* ── шапка ── */
   .hero{position:relative;border-radius:16px;overflow:hidden;margin-bottom:14px;min-height:118px;
     background:linear-gradient(120deg,color-mix(in srgb, var(--accent) 22%, #10141a) 0%,color-mix(in srgb, var(--accent) 55%, #10141a) 55%,var(--accent) 100%);box-shadow:var(--sh);background-size:cover;background-position:center}
+  .hero.hasposter{background-size:contain;background-repeat:no-repeat;background-position:center;background-color:var(--ink)}
   .hero.hasposter::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,10,14,.8),rgba(8,10,14,.15));pointer-events:none}
   .hero .poster-emoji-wrap{position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:1;width:92px;height:92px;
     display:none;align-items:center;justify-content:center;pointer-events:none}
@@ -539,10 +540,18 @@ function openDatePicker(targetId){dpTarget=targetId;
   openSheet(buildDatePickerHtml());}
 function dpMove(dir){dpM+=dir;if(dpM<0){dpM=11;dpY--;}if(dpM>11){dpM=0;dpY++;}setSheet(buildDatePickerHtml());}
 function closeDatePicker(){if(dpReturnHtml!==null){setSheet(dpReturnHtml);dpReturnHtml=null;}else dismiss();}
-function pickDate(key){const inp=document.getElementById(dpTarget);if(inp)inp.value=key;
-  if(dpReturnHtml!==null){setSheet(dpReturnHtml);dpReturnHtml=null;
-    const btn=document.getElementById(dpTarget+"-btn");if(btn)btn.innerHTML=`<span>${ruDate(key)}</span><span class="ch">📅</span>`;}
-  else{const btn=document.getElementById(dpTarget+"-btn");if(btn)btn.innerHTML=`<span>${ruDate(key)}</span><span class="ch">📅</span>`;dismiss();}}
+function pickDate(key){
+  if(dpReturnHtml!==null){
+    setSheet(dpReturnHtml);dpReturnHtml=null;
+    const inp=document.getElementById(dpTarget);if(inp)inp.value=key;
+    const btn=document.getElementById(dpTarget+"-btn");if(btn)btn.innerHTML=`<span>${ruDate(key)}</span><span class="ch">📅</span>`;
+    if(dpTarget==="cs-date")moveCellToDate(key);
+  } else {
+    const inp=document.getElementById(dpTarget);if(inp)inp.value=key;
+    const btn=document.getElementById(dpTarget+"-btn");if(btn)btn.innerHTML=`<span>${ruDate(key)}</span><span class="ch">📅</span>`;
+    dismiss();
+  }
+}
 const fmt=(n,d=0)=>(Math.round(n*10**d)/10**d).toLocaleString("ru-RU");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const posterKey=t=>`__poster_${t}__`;
@@ -972,9 +981,15 @@ function renderCellSheet(){const m=machineById(cellM);const items=DB.logs.filter
       <button class="btn primary" style="margin-top:8px" onclick="saveCell()">Готово</button>`;
   }
   setSheet(`<div class="grip"></div><div class="shhead"><h3>${esc(m?m.name:"—")}</h3><button class="closeb" onclick="dismiss()">✕</button></div>
-    <div class="h3sub">${ruDate(cellDate)}</div>${photo}${header}
+    <div class="field2"><label>Дата</label><input type="hidden" id="cs-date" value="${cellDate}"><button type="button" class="picksel" id="cs-date-btn" onclick="openDatePicker('cs-date')"><span>${ruDate(cellDate)}</span><span class="ch">📅</span></button></div>
+    ${photo}${header}
     <div id="setlines">${lines||'<p class="sub">Пока пусто — добавь первый подход.</p>'}</div>
     ${addBtn}`);}
+function moveCellToDate(newDate){if(!newDate||newDate===cellDate)return;
+  const conflict=DB.logs.some(l=>l.machineId===cellM&&l.date===newDate);
+  DB.logs.filter(l=>l.machineId===cellM&&l.date===cellDate).forEach(l=>{l.date=newDate;});
+  cellDate=newDate;saveMeta();renderLog();renderStatsBody();renderCellSheet();
+  flash(conflict?"Дата изменена (объединено с существующими записями)":"Дата изменена");}
 function saveSteps(){const steps=parseInt(document.getElementById("cs-steps").value)||0;
   DB.logs=DB.logs.filter(l=>!(l.machineId===cellM&&l.date===cellDate));
   if(steps)DB.logs.push({id:uid(),date:cellDate,machineId:cellM,steps,weight:null,reps:null,sets:null});
