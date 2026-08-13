@@ -37,7 +37,7 @@
   /* ── шапка ── */
   .hero{position:relative;border-radius:16px;overflow:hidden;margin-bottom:14px;min-height:118px;
     background:linear-gradient(120deg,color-mix(in srgb, var(--accent) 22%, #10141a) 0%,color-mix(in srgb, var(--accent) 55%, #10141a) 55%,var(--accent) 100%);box-shadow:var(--sh);background-size:cover;background-position:center}
-  .hero.hasposter{background-size:contain;background-repeat:no-repeat;background-position:center;background-color:var(--ink)}
+  .hero.hasposter{background-size:cover;background-repeat:no-repeat;background-position:center}
   .hero.hasposter::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,10,14,.8),rgba(8,10,14,.15));pointer-events:none}
   .hero .poster-emoji-wrap{position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:1;width:92px;height:92px;
     display:none;align-items:center;justify-content:center;pointer-events:none}
@@ -165,11 +165,17 @@
     font-family:var(--mono);font-size:13.5px;color:var(--text);background:var(--field);border:1px solid var(--line);position:relative}
   .calcell.empty{background:transparent;border:none}
   .calcell.has{background:var(--accent);color:#fff;font-weight:800;cursor:pointer;border-color:var(--accent)}
+  .calcell.planned{background:var(--field);color:var(--accent);font-weight:800;cursor:pointer;border:2px dashed var(--accent)}
   .calcell.today{outline:2px solid var(--ink);outline-offset:-2px}
 
   /* ── по упражнениям / баланс ── */
   .mblk{border:1px solid var(--line2);border-radius:11px;margin-bottom:9px;overflow:hidden;background:var(--card)}
   .mblk .mh{display:grid;grid-template-columns:56px 1fr auto;gap:11px;align-items:center;padding:12px;cursor:pointer}
+  .mblk .mh:has(.daysel-check){grid-template-columns:26px 56px 1fr}
+  .daysel-check{width:26px;height:26px;border-radius:7px;border:2px solid var(--line2);background:var(--field);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:15px;flex:0 0 auto}
+  .daysel-check.on{background:var(--accent);border-color:var(--accent)}
+  .daysel-row-on{background:var(--accent-soft);border-radius:11px}
   .mblk .mh:active{filter:brightness(.97)}
   .mblk .mh .nm{font-weight:700;font-size:16.5px}
   .mblk .mh .nm small{display:block;color:var(--muted);font-weight:600;font-size:13px;margin-top:2px}
@@ -179,7 +185,7 @@
   .hrow{display:flex;justify-content:space-between;font-family:var(--mono);font-size:14.5px;padding:7px 0;border-bottom:1px solid var(--line)}
   .hrow:last-child{border:none} .hrow .hd{color:var(--muted)} .hrow .hw{font-weight:700}
   .thumb{width:56px;height:56px;border-radius:9px;object-fit:cover;background:var(--field);border:1px solid var(--line)}
-  .thumb.ph{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:24px}
+  .thumb.ph{display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:24px;background:var(--accent-soft)}
   .gtag{display:inline-block;font-size:10px;font-weight:800;color:var(--accent);background:var(--accent-soft);border-radius:5px;padding:1px 6px;margin-left:4px;vertical-align:1px}
 
   .balchip{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:20px;background:var(--field);
@@ -617,17 +623,26 @@ function setCustomAccent(ev){customAccent=ev.target.value;try{localStorage.setIt
 function clearCustomAccent(){customAccent=null;try{localStorage.removeItem(CKEY);}catch(e){}switchTab(curTab);flash("Акцент по теме восстановлен");}
 
 /* ── шапка/постер ── */
+let posterAspect={};
+function savePosterAspect(){try{localStorage.setItem("zhelezo.posteraspect",JSON.stringify(posterAspect));}catch(e){}}
+function loadPosterAspect(){try{const r=localStorage.getItem("zhelezo.posteraspect");if(r)posterAspect=JSON.parse(r);}catch(e){}}
+function imgNaturalSize(dataUrl){return new Promise(res=>{const im=new Image();im.onload=()=>res({w:im.naturalWidth,h:im.naturalHeight});im.onerror=()=>res(null);im.src=dataUrl;});}
 function applyHero(tab){const h=document.getElementById("hero");const photo=IMG[posterKey(tab)];const pc=posterChoice[tab];
   const emojiEl=document.getElementById("poster-emoji");
-  if(photo){h.classList.add("hasposter");h.classList.remove("haspreset");h.style.backgroundImage=`url(${photo})`;}
-  else{h.classList.remove("hasposter");h.style.backgroundImage="";
+  if(photo){h.classList.add("hasposter");h.classList.remove("haspreset");h.style.backgroundImage=`url(${photo})`;
+    const ar=posterAspect[tab];h.style.aspectRatio=ar?`${ar.w} / ${ar.h}`:"";}
+  else{h.classList.remove("hasposter");h.style.backgroundImage="";h.style.aspectRatio="";
     if(pc){h.classList.add("haspreset");
       if(emojiEl){emojiEl.textContent=pc.em;emojiEl.className="poster-emoji pe-"+pc.anim;}}
     else{h.classList.remove("haspreset");}}}
 async function setPosterFor(ev,tab){const f=ev.target.files[0];ev.target.value="";if(!f)return;
   const data=await compress(f,1500,.78);if(!data)return;const k=posterKey(tab);IMG[k]=data;await idbPut(k,data);
+  const sz=await imgNaturalSize(data);
+  if(sz&&sz.w&&sz.h){const r=Math.min(3.2,Math.max(1.3,sz.w/sz.h));posterAspect[tab]={w:Math.round(r*100),h:100};}else delete posterAspect[tab];
+  savePosterAspect();
   delete posterChoice[tab];savePosterChoice();if(tab===curTab)applyHero(tab);renderPosterMgr();flash("Постер обновлён");}
 async function removeTabPoster(tab){const k=posterKey(tab);delete IMG[k];await idbDel(k);
+  delete posterAspect[tab];savePosterAspect();
   delete posterChoice[tab];savePosterChoice();if(tab===curTab)applyHero(tab);renderPosterMgr();}
 async function choosePosterIcon(tab,emoji){const idx=POSTER_PRESETS.findIndex(p=>p[0]===emoji);
   posterChoice[tab]={em:emoji,anim:POSTER_ANIM[idx]||"lift"};savePosterChoice();
@@ -734,7 +749,7 @@ window.addEventListener("beforeunload",e=>{e.preventDefault();e.returnValue="";}
     const logBody=document.getElementById("log-body");
     if(logBody&&logBody.contains(t)){
       const td=t.closest(".grid td[data-mid]");if(td)return[td,"cell"];
-      const cal=t.closest(".calcell.has[data-date]");if(cal)return[cal,"day"];
+      const cal=t.closest(".calcell.has[data-date], .calcell.planned[data-date]");if(cal)return[cal,"day"];
       return[null,null];}
     const mlist=document.getElementById("machine-list");
     if(mlist&&mlist.contains(t)){const card=t.closest(".mcard[data-id]");if(card)return[card,"machine"];return[null,null];}
@@ -837,11 +852,16 @@ function cellData(machineId,date){const items=DB.logs.filter(l=>l.machineId===ma
   const totalSets=items.filter(l=>l.sets!=null).reduce((s,l)=>s+(l.sets||0),0)||items.length;
   return {mtype:"strength",w:avgW,reps:avgR,sets:totalSets,count:items.length};}
 function maxWeightOf(machineId){let mx=0;DB.logs.forEach(l=>{if(l.machineId===machineId&&l.weight>mx)mx=l.weight;});return mx;}
+let gridExpanded=false;
+function toggleGridExpand(){gridExpanded=!gridExpanded;renderLog();}
 function renderGrid(box){
-  const dates=[...new Set(DB.logs.map(l=>l.date))].sort();
+  const allDates=[...new Set(DB.logs.map(l=>l.date))].sort();
+  const LIMIT=30;
+  const dates=(gridExpanded||allDates.length<=LIMIT)?allDates:allDates.slice(-LIMIT);
   const mach=DB.machines.filter(m=>DB.logs.some(l=>l.machineId===m.id));
   if(!mach.length||!dates.length){box.innerHTML=`<div class="empty">Нет данных для сетки.</div>`;return;}
   const last=dates[dates.length-1];
+  const expandBtn=allDates.length>LIMIT?`<button class="btn ghost mini" style="margin-bottom:8px" onclick="toggleGridExpand()">${gridExpanded?`Свернуть — показывать последние ${LIMIT} дней`:`Показаны последние ${LIMIT} из ${allDates.length} — показать все`}</button>`:"";
   const head=`<th class="corner">Упражнение</th>`+dates.map(d=>`<th class="${d===last?'cur':''}">${gridDate(d)}</th>`).join("");
   const rows=mach.map(m=>{
     const cells=dates.map(d=>{const c=cellData(m.id,d);
@@ -852,7 +872,7 @@ function renderGrid(box){
       else{cellW=`${fmt(c.w,1)} кг`;cellSub=(c.reps||c.sets)?`<span class="r">${c.sets||"–"}×${c.reps||"–"}</span>`:"";}
       return `<td class="${d===last?'cur':''}" data-mid="${m.id}" data-date="${d}" onclick="cellEdit('${m.id}','${d}')"><div class="cell"><span class="w">${cellW}</span>${cellSub}</div></td>`;}).join("");
     return `<tr><th class="exn" onclick="openMachine('${m.id}')"><span class="nmw">${esc(m.name)}</span>${m.short?`<small>${esc(m.short)}</small>`:""}</th>${cells}</tr>`;}).join("");
-  box.innerHTML=`<div class="gridwrap" id="gw"><table class="grid"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+  box.innerHTML=`${expandBtn}<div class="gridwrap" id="gw"><table class="grid"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
     <div class="legend"><span><b>Сверху</b> — вес, кг. <b>Снизу</b> — подходы × повторы.</span>
     <span>Тап — правка. Долгое нажатие — удалить.</span></div>`;
   const gw=document.getElementById("gw");if(gw)gw.scrollLeft=gw.scrollWidth;}
@@ -861,14 +881,15 @@ function renderGrid(box){
 let calY=null,calM=null;
 function renderCalendar(box){const now=new Date();if(calY==null){calY=now.getFullYear();calM=now.getMonth();}
   const first=new Date(calY,calM,1);const startDow=(first.getDay()+6)%7;const dim=new Date(calY,calM+1,0).getDate();
-  const logDates=new Set(DB.logs.map(l=>l.date));const mn=first.toLocaleDateString("ru-RU",{month:"long",year:"numeric"});
+  const logDates=new Set(DB.logs.map(l=>l.date));const plannedDates=new Set(Object.keys(DB.dayPlans).filter(d=>!logDates.has(d)));
+  const mn=first.toLocaleDateString("ru-RU",{month:"long",year:"numeric"});
   const pad=n=>String(n).padStart(2,"0");
   let cells="";for(let i=0;i<startDow;i++)cells+=`<div class="calcell empty"></div>`;
-  for(let d=1;d<=dim;d++){const key=`${calY}-${pad(calM+1)}-${pad(d)}`;const has=logDates.has(key);const isT=key===today();
-    cells+=`<div class="calcell ${has?'has':''} ${isT?'today':''}" ${has?`data-date="${key}" onclick="daySheet('${key}')"`:""}>${d}</div>`;}
+  for(let d=1;d<=dim;d++){const key=`${calY}-${pad(calM+1)}-${pad(d)}`;const has=logDates.has(key);const planned=!has&&plannedDates.has(key);const isT=key===today();
+    cells+=`<div class="calcell ${has?'has':''} ${planned?'planned':''} ${isT?'today':''}" ${(has||planned)?`data-date="${key}" onclick="daySheet('${key}')"`:""}>${d}</div>`;}
   box.innerHTML=`<div class="calhead"><button onclick="calMove(-1)">‹</button><span class="mn">${mn}</span><button onclick="calMove(1)">›</button></div>
     <div class="caldow"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
-    <div class="calgrid">${cells}</div><p class="hint">Цветные дни — тренировки. Тап — что делал · долгое нажатие — удалить всю тренировку.</p>`;}
+    <div class="calgrid">${cells}</div><p class="hint">Заполненные — тренировки, пунктир — план без записей. Тап — что делал · долгое нажатие — удалить.</p>`;}
 function calMove(dir){calM+=dir;if(calM<0){calM=11;calY--;}if(calM>11){calM=0;calY++;}renderCalendar(document.getElementById("log-body"));}
 function thumbHtml(m,clickZoom){const has=m&&m.imgs&&m.imgs.length;
   if(has&&clickZoom)return `<img class="thumb" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();zoom('${m.imgs[0]}')">`;
@@ -883,18 +904,42 @@ async function quickDeleteCell(mid,date){const m=machineById(mid);
   }
   saveMeta();renderLog();renderStatsBody();flash("Удалено");}
 async function quickDeleteDay(date){const cnt=DB.logs.filter(l=>l.date===date).length;
-  if(!(await askConfirm(`Удалить всю тренировку за ${ruDate(date)}? Записей: ${cnt}.`,"Удалить тренировку")))return;
+  const msg=cnt?`Удалить всю тренировку за ${ruDate(date)}? Записей: ${cnt}.`:`Удалить запланированную тренировку за ${ruDate(date)}? Упражнения ещё не внесены.`;
+  if(!(await askConfirm(msg,"Удалить тренировку")))return;
   DB.logs=DB.logs.filter(l=>l.date!==date);delete DB.dayPlans[date];
   saveMeta();renderLog();renderStatsBody();flash("Тренировка удалена");}
+let daySelectMode=false, daySelectedSet=new Set(), daySelectDate=null;
+function toggleDaySelectMode(date){
+  if(daySelectMode&&daySelectDate===date){daySelectMode=false;daySelectedSet=new Set();}
+  else{daySelectMode=true;daySelectDate=date;daySelectedSet=new Set();}
+  daySheet(date);}
+function toggleDaySelect(id){if(daySelectedSet.has(id))daySelectedSet.delete(id);else daySelectedSet.add(id);daySheet(daySelectDate);}
+async function deleteDaySelected(){if(!daySelectedSet.size)return;
+  const date=daySelectDate;const n=daySelectedSet.size;
+  const word=n===1?"упражнение":(n>=2&&n<=4?"упражнения":"упражнений");
+  if(!(await askConfirm(`Удалить ${n} ${word} из тренировки за ${ruDate(date)}?`,"Удалить выбранное")))return;
+  const ids=[...daySelectedSet];
+  DB.logs=DB.logs.filter(l=>!(l.date===date&&ids.includes(l.machineId)));
+  const plan=DB.dayPlans[date];
+  if(plan&&plan.order){plan.order=plan.order.filter(x=>!ids.includes(x));if(!plan.order.length)delete DB.dayPlans[date];}
+  daySelectMode=false;daySelectedSet=new Set();
+  saveMeta();renderLog();renderStatsBody();
+  if(DB.logs.some(l=>l.date===date)||DB.dayPlans[date])daySheet(date);else dismiss();
+  flash("Удалено");}
 function daySheet(date){const items=DB.logs.filter(l=>l.date===date);const byM={};items.forEach(l=>{(byM[l.machineId]=byM[l.machineId]||[]).push(l);});
+  if(daySelectDate!==date){daySelectMode=false;daySelectedSet=new Set();}
+  daySelectDate=date;
   const plan=DB.dayPlans[date];const validOrder=plan&&plan.order?plan.order.filter(id=>machineById(id)):[];
   const orderSet=new Set(validOrder);
   const extraIds=Object.keys(byM).filter(id=>!orderSet.has(id));
   function rowHtml(id){const m=machineById(id);
-    const sets=byM[id]?byM[id].map(l=>`${fmt(l.weight,1)}${l.reps?`×${l.reps}`:""}${l.sets?` (${l.sets}п)`:""}`).join("  ·  "):"";
-    return `<div class="mblk"><div class="mh" onclick="openMachine('${id}')">${thumbHtml(m,true)}
-      <div class="nm">${esc(m?m.name:"—")}${m&&m.group?`<span class="gtag">${esc(m.group)}</span>`:""}<small>${sets?sets+" кг":"пока не записано"}</small></div>
-      <div style="color:var(--muted);font-size:20px">›</div></div></div>`;}
+    const sets=byM[id]?byM[id].map(l=>logLineStr(m,l)).join("  ·  "):"";
+    const selected=daySelectMode&&daySelectedSet.has(id);
+    const clickFn=daySelectMode?`toggleDaySelect('${id}')`:`openMachine('${id}')`;
+    const check=daySelectMode?`<div class="daysel-check ${selected?'on':''}">${selected?'✓':''}</div>`:"";
+    return `<div class="mblk"><div class="mh ${selected?'daysel-row-on':''}" onclick="${clickFn}">${check}${thumbHtml(m,!daySelectMode)}
+      <div class="nm">${esc(m?m.name:"—")}${m&&m.group?`<span class="gtag">${esc(m.group)}</span>`:""}<small>${sets||"пока не записано"}</small></div>
+      ${daySelectMode?"":'<div style="color:var(--muted);font-size:20px">›</div>'}</div></div>`;}
   let planBlock="";
   if(validOrder.length){
     let rows="";
@@ -905,20 +950,28 @@ function daySheet(date){const items=DB.logs.filter(l=>l.date===date);const byM={
     planBlock=`<div class="h3sub" style="margin:14px 0 8px">📋 ${esc(plan.name)}${plan.rounds?` · ${plan.rounds} круга`:""}</div>${rows}`;
   }
   const extraBlock=extraIds.length?`${validOrder.length?'<div class="h3sub" style="margin:16px 0 8px">Остальное</div>':""}${extraIds.map(rowHtml).join("")}`:"";
+  const hasAny=validOrder.length||extraIds.length;
+  const selectBtn=hasAny?`<button class="btn ghost mini" style="margin-bottom:8px" onclick="toggleDaySelectMode('${date}')">${daySelectMode?"Отмена":"☑ Выбрать несколько"}</button>`:"";
+  const deleteBar=daySelectMode&&daySelectedSet.size?`<button class="btn danger" style="margin-top:12px" onclick="deleteDaySelected()">Удалить выбранное (${daySelectedSet.size})</button>`:"";
   openSheet(`<div class="grip"></div><div class="shhead"><h3>Тренировка</h3><button class="closeb" onclick="dismiss()">✕</button></div>
     <div class="h3sub">${ruDate(date)} · ${items.length} подходов${timingStr(date)}${kcalDayStr(date)}</div>
-    <button class="btn ghost mini" style="margin-bottom:8px" onclick="editTiming('${date}')">⏱ Время тренировки</button>
-    ${planBlock}${extraBlock}${(!validOrder.length&&!extraIds.length)?'<div class="empty">Нет записей</div>':""}`);}
+    <div class="row" style="gap:8px">${selectBtn}<button class="btn ghost mini" style="margin-bottom:8px" onclick="editTiming('${date}')">⏱ Время тренировки</button></div>
+    ${planBlock}${extraBlock}${!hasAny?'<div class="empty">Нет записей</div>':""}${deleteBar}`);}
 
+function logLineStr(m,l){const mtype=m&&m.mtype||"strength";
+  if(mtype==="steps")return `${l.steps||0} шагов`;
+  if(mtype==="cardio")return `${l.duration?l.duration+" мин":""}${l.distance?` · ${l.distance} км`:""}${l.hr?` · ${l.hr} уд/мин`:""}`||"—";
+  return `${fmt(l.weight,1)} кг${l.reps?` × ${l.reps}`:""}${l.sets?` · ${l.sets}п`:""}`;}
 function renderByMachines(){const byM={};DB.logs.forEach(l=>{(byM[l.machineId]=byM[l.machineId]||[]).push(l);});
   const ids=Object.keys(byM).sort((a,b)=>Math.max(...byM[b].map(x=>Date.parse(x.date)))-Math.max(...byM[a].map(x=>Date.parse(x.date))));
-  return ids.map(id=>{const m=machineById(id);const items=byM[id].slice().sort((a,b)=>a.date<b.date?1:-1);const last=items[0];
-    const spark=sparkline(byM[id].slice().sort((a,b)=>a.date<b.date?-1:1).map(x=>x.weight));
-    const hist=items.map(l=>`<div class="hrow"><span class="hd">${ruDate(l.date)}</span><span class="hw">${fmt(l.weight,1)} кг${l.reps?` × ${l.reps}`:""}${l.sets?` · ${l.sets}п`:""}</span></div>`).join("");
+  return ids.map(id=>{const m=machineById(id);const mtype=m&&m.mtype||"strength";const items=byM[id].slice().sort((a,b)=>a.date<b.date?1:-1);const last=items[0];
+    const spark=mtype==="strength"?sparkline(byM[id].slice().sort((a,b)=>a.date<b.date?-1:1).map(x=>x.weight)):"";
+    const hist=items.map(l=>`<div class="hrow"><span class="hd">${ruDate(l.date)}</span><span class="hw">${logLineStr(m,l)}</span></div>`).join("");
+    const chartBtn=mtype==="strength"?`<button class="btn ghost mini" onclick="openExerciseChart('${id}')">📈 График</button>`:"";
     return `<div class="mblk"><div class="mh" onclick="this.parentElement.classList.toggle('open')">${thumbHtml(m,true)}
       <div class="nm">${esc(m?m.name:"—")}${m&&m.group?`<span class="gtag">${esc(m.group)}</span>`:""}<small>${byM[id].length} записей&nbsp; ${spark}</small></div>
-      <div class="last">${fmt(last.weight,1)}<small style="font-size:12px;color:var(--muted)"> кг</small></div></div>
-      <div class="hist">${hist}<div class="row" style="margin-top:8px"><button class="btn ghost mini" onclick="openMachine('${id}')">Открыть карточку</button><button class="btn ghost mini" onclick="openExerciseChart('${id}')">📈 График</button></div></div></div>`;}).join("");}
+      <div class="last">${logLineStr(m,last)}</div></div>
+      <div class="hist">${hist}<div class="row" style="margin-top:8px"><button class="btn ghost mini" onclick="openMachine('${id}')">Открыть карточку</button>${chartBtn}</div></div></div>`;}).join("");}
 function sparkline(vals){if(vals.length<2)return `<span style="color:var(--muted)">—</span>`;
   const w=64,h=16,mn=Math.min(...vals),mx=Math.max(...vals),sp=(mx-mn)||1;
   const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-((v-mn)/sp)*h).toFixed(1)}`).join(" ");
@@ -1030,7 +1083,7 @@ function renderTplPicklist(){
       body+=`<div class="pairhead">Пара ${pairNum}${isLast?" (одиночное)":""}</div>`;
       [draftTplExercises[i],draftTplExercises[i+1]].filter(Boolean).forEach(mid=>{
         const m=machineById(mid);if(!m)return;
-        const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">&#9636;</div>`;
+        const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">▤</div>`;
         body+=`<div class="pitem" style="cursor:pointer;background:var(--accent-soft);border-color:var(--accent)" onclick="toggleTplExercise('${m.id}')">
           <div style="display:flex;align-items:center;gap:10px;min-width:0">${thumb}<span>${esc(m.name)}</span></div>
           <span style="color:var(--down);font-weight:800;font-size:18px;flex:0 0 auto">✕</span></div>`;});
@@ -1040,7 +1093,7 @@ function renderTplPicklist(){
   const selSet=new Set(draftTplExercises);
   const byG={};DB.machines.forEach(m=>{if(!selSet.has(m.id))(byG[m.group||"Другое"]=byG[m.group||"Другое"]||[]).push(m);});
   GROUPS.forEach(g=>{if(!byG[g])return;body+=`<div class="pgh">${g}</div>`+byG[g].map(m=>{
-    const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">&#9636;</div>`;
+    const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">▤</div>`;
     return `<div class="pitem" style="cursor:pointer" onclick="toggleTplExercise('${m.id}')">
       <div style="display:flex;align-items:center;gap:10px;min-width:0">${thumb}<span>${esc(m.name)}</span></div>
       <span style="color:var(--accent);font-weight:800;font-size:18px;flex:0 0 auto">➕</span></div>`;}).join("");});
@@ -1097,12 +1150,15 @@ function applyTemplateNow(id){const t=DB.templates.find(x=>x.id===id);if(!t)retu
     if(mtype==="strength")DB.logs.push({id:uid(),date,machineId:it.exerciseId,weight:null,reps:null,sets:null});
   });
   DB.dayPlans[date]={name:t.name,superset:t.superset,rounds:t.rounds,order:items.map(it=>it.exerciseId)};
-  saveMeta();renderLog();renderStatsBody();dismiss();flash(`План записан: ${items.length} упражнений 💪`);}
+  saveMeta();renderLog();renderStatsBody();dismiss();flash(`Записано на ${ruDate(date)}: ${items.length} упражнений 💪`);}
 
 function buildBigChartSVG(machineId){
+  const m=machineById(machineId);
+  if(m&&(m.mtype||"strength")!=="strength")return `<div class="empty">График веса доступен только для силовых упражнений.</div>`;
   const dates=[...new Set(DB.logs.filter(l=>l.machineId===machineId).map(l=>l.date))].sort();
   if(!dates.length)return `<div class="empty">Нет данных для графика.</div>`;
-  const pts=dates.map(d=>({date:d,w:cellData(machineId,d).w}));
+  const pts=dates.map(d=>({date:d,w:cellData(machineId,d).w})).filter(p=>p.w!=null);
+  if(!pts.length)return `<div class="empty">Нет данных для графика.</div>`;
   const W=640,H=300,P=48;
   const minY=Math.min(...pts.map(p=>p.w)),maxY=Math.max(...pts.map(p=>p.w)),spanY=(maxY-minY)||1;
   const X=i=>P+(pts.length===1?(W-2*P)/2:(i/(pts.length-1))*(W-2*P));
@@ -1180,12 +1236,15 @@ function zoom(imgId){document.getElementById("viewer-img").src=IMG[imgId]||"";do
   if(!viewerOpen){viewerOpen=true;history.pushState({viewer:1},"");}}
 
 /* ── анализ ── */
-function buildAnalysisText(){const L=["Проанализируй мой прогресс. Ниже — упражнения с датами и рабочим весом (взят максимальный подход за день, ×повторы). Скажи: где застой (несколько недель без роста), что менять, и есть ли перекос по группам мышц.",""];
+function buildAnalysisText(){const L=["Проанализируй мой прогресс. Ниже — упражнения с датами и рабочим весом (взят максимальный подход за день, ×повторы), а также кардио и шаги. Скажи: где застой (несколько недель без роста), что менять, и есть ли перекос по группам мышц.",""];
   const mach=DB.machines.filter(m=>DB.logs.some(l=>l.machineId===m.id));
-  mach.forEach(m=>{const dts=[...new Set(DB.logs.filter(l=>l.machineId===m.id).map(l=>l.date))].sort();
-    const seq=dts.map(d=>{const c=cellData(m.id,d);return `${gridDate(d)}:${fmt(c.w,1)}${c.reps?"×"+c.reps:""}${c.sets?"("+c.sets+"п)":""}`;}).join(", ");
+  mach.forEach(m=>{const mtype=m.mtype||"strength";const dts=[...new Set(DB.logs.filter(l=>l.machineId===m.id).map(l=>l.date))].sort();
+    const seq=dts.map(d=>{const c=cellData(m.id,d);if(!c)return `${gridDate(d)}:—`;
+      if(mtype==="steps")return `${gridDate(d)}:${c.steps||0}шаг`;
+      if(mtype==="cardio")return `${gridDate(d)}:${c.duration||"?"}мин${c.distance?"/"+c.distance+"км":""}${c.hr?"@"+c.hr+"уд":""}`;
+      return `${gridDate(d)}:${fmt(c.w,1)}${c.reps?"×"+c.reps:""}${c.sets?"("+c.sets+"п)":""}`;}).join(", ");
     L.push(`• ${m.name}${m.group?` [${m.group}]`:""}: ${seq}`);});
-  const per={};DB.logs.forEach(l=>{if(daysAgo(l.date)<14){const m=machineById(l.machineId);const g=m?(m.group||"Другое"):"Другое";per[g]=(per[g]||0)+1;}});
+  const per={};DB.logs.forEach(l=>{if(daysAgo(l.date)<14){const m=machineById(l.machineId);if(!m||(m.mtype||"strength")!=="strength")return;const g=m.group||"Другое";per[g]=(per[g]||0)+1;}});
   L.push("",`Подходы за 14 дней по группам: ${Object.keys(per).map(g=>`${g}=${per[g]}`).join(", ")||"нет данных"}.`);
   return L.join("\n");}
 function openAsk(){const txt=buildAnalysisText();
@@ -1203,7 +1262,10 @@ function download(name,text,type){const b=new Blob([text],{type});const u=URL.cr
 function csvCell(v){v=String(v??"");return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function exportCSV(){const dates=[...new Set(DB.logs.map(l=>l.date))].sort();const mach=DB.machines.filter(m=>DB.logs.some(l=>l.machineId===m.id));
   const head=["Упражнение","Группа","Пометка",...dates.map(d=>new Date(d+"T00:00").toLocaleDateString("ru-RU"))];
-  const rows=mach.map(m=>{const cells=dates.map(d=>{const c=cellData(m.id,d);return c?(c.reps?`${fmt(c.w,1)}×${c.reps}`:`${fmt(c.w,1)}`):"";});return [m.name,m.group||"",m.short||"",...cells];});
+  const rows=mach.map(m=>{const mtype=m.mtype||"strength";const cells=dates.map(d=>{const c=cellData(m.id,d);if(!c)return"";
+    if(mtype==="steps")return `${c.steps||0}шаг`;
+    if(mtype==="cardio")return `${c.duration||""}мин${c.distance?"/"+c.distance+"км":""}${c.hr?"@"+c.hr:""}`;
+    return c.reps?`${fmt(c.w,1)}×${c.reps}`:`${fmt(c.w,1)}`;});return [m.name,m.group||"",m.short||"",...cells];});
   const csv="\uFEFF"+[head,...rows].map(r=>r.map(csvCell).join(";")).join("\r\n");download(`zhelezo_${today()}.csv`,csv,"text/csv");flash("CSV готов");}
 function exportJSON(){download(`zhelezo_backup_${today()}.json`,JSON.stringify({...DB,images:IMG},null,2),"application/json");flash("Бэкап готов — сохрани копию");}
 async function importJSON(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();
@@ -1224,14 +1286,14 @@ function saveProfile(){PROF.sex=document.getElementById("prof-sex").value;
   PROF.age=parseInt(document.getElementById("prof-age").value)||null;
   PROF.height=parseInt(document.getElementById("prof-height").value)||null;
   PROF.weight=parseFloat(document.getElementById("prof-weight").value)||null;
-  try{localStorage.setItem("mytrain.prof",JSON.stringify(PROF));}catch(e){}
+  try{localStorage.setItem(PROFKEY,JSON.stringify(PROF));}catch(e){}
   flash("Профиль сохранён");}
 function addWeightLog(){const w=parseFloat(document.getElementById("wl-weight").value);
   if(!w){flash("Введи вес");return;}
   if(!DB.weightLog)DB.weightLog=[];
   DB.weightLog.push({date:today(),weight:w});
   PROF.weight=w;document.getElementById("prof-weight").value=w;
-  try{localStorage.setItem("mytrain.prof",JSON.stringify(PROF));}catch(e){}
+  try{localStorage.setItem(PROFKEY,JSON.stringify(PROF));}catch(e){}
   saveMeta();document.getElementById("wl-weight").value="";renderWeightLog();}
 function renderWeightLog(){const el=document.getElementById("weight-log-list");if(!el)return;
   const log=(DB.weightLog||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
@@ -1285,7 +1347,7 @@ function kcalDayStr(date){const k=kcalDay(date);if(!k)return"";return ` · ~${k}
 function formatDur(sec){const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);
   return h?`${h}ч ${m}мин`:`${m}мин`;}
 
-async function init(){loadMeta();loadProfile();await idbOpen();Object.assign(IMG,await idbAll());
+async function init(){loadMeta();loadProfile();loadPosterAspect();await idbOpen();Object.assign(IMG,await idbAll());
   for(const t in posterChoice){const k=posterKey(t);if(IMG[k]){await idbDel(k);delete IMG[k];}}
   document.getElementById("l-date").value=today();
   document.getElementById("l-date-btn").innerHTML=`<span>${ruDate(today())}</span><span class="ch">📅</span>`;
