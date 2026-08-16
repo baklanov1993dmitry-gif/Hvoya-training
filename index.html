@@ -798,9 +798,12 @@ function updatePickBtn(){const b=document.getElementById("pickbtn");const m=mach
 function openPicker(){if(!DB.machines.length&&!DB.templates.length){openMachine(null);return;}
   const byG={};DB.machines.forEach(m=>{(byG[m.group||"Другое"]=byG[m.group||"Другое"]||[]).push(m);});
   let body="";
-  if(DB.templates.length){body+=`<div class="pgh">Шаблоны дня</div>`+DB.templates.map(t=>{const valid=(t.items||[]).filter(it=>machineById(it.exerciseId));
+  if(DB.templates.length){body+=`<div class="pgh">Шаблоны дня</div>`+DB.templates.map(t=>{const valid=(t.items||[]).filter(it=>it&&machineById(it.exerciseId));
     return `<div class="pitem" onclick="openTemplateRun('${t.id}')"><span>▤ ${esc(t.name)}</span><small>${valid.length} упражнений</small></div>`;}).join("");}
-  GROUPS.forEach(g=>{if(!byG[g])return;body+=`<div class="pgh">${g}</div>`+byG[g].map(m=>`<div class="pitem" onclick="pickMachine('${m.id}')"><span>${esc(m.name)}</span>${m.short?`<small>${esc(m.short)}</small>`:""}</div>`).join("");});
+  GROUPS.forEach(g=>{if(!byG[g])return;body+=`<div class="pgh">${g}</div>`+byG[g].map(m=>{
+    const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();zoom('${m.imgs[0]}')">`:`<div class="thumb ph" style="width:44px;height:44px">▤</div>`;
+    return `<div class="pitem" onclick="pickMachine('${m.id}')" style="align-items:center;gap:10px">
+      ${thumb}<div style="flex:1;min-width:0"><div>${esc(m.name)}</div><small style="color:var(--muted)">${m.group?esc(m.group):""}${m.short?` · ${esc(m.short)}`:""}</small></div></div>`;}).join("");});
   openSheet(`<div class="grip"></div><div class="shhead"><h3>Выбор упражнения</h3><button class="closeb" onclick="dismiss()">✕</button></div>
     <div class="h3sub">Тап по шаблону — сразу откроет запись сразу нескольких упражнений. Тап по упражнению — впишет его одно.</div>
     <button class="btn ghost" style="margin-bottom:8px" onclick="openMachine(null)">+ Новое упражнение</button><div class="picklist">${body}</div>`);}
@@ -900,7 +903,7 @@ async function quickDeleteCell(mid,date){const m=machineById(mid);
   const plan=DB.dayPlans[date];
   if(plan&&plan.order&&plan.order.includes(mid)){
     const split=await askConfirm(`«${m?m.name:'Упражнение'}» было частью суперсета «${plan.name}» за этот день. Убрать его из очерёдности тоже?`,"Разбить пару");
-    if(split){plan.order=plan.order.filter(x=>x!==mid);if(!plan.order.length)delete DB.dayPlans[date];}
+    if(split){plan.order=plan.order.map(x=>x===mid?null:x);if(!plan.order.some(Boolean))delete DB.dayPlans[date];}
   }
   saveMeta();renderLog();renderStatsBody();flash("Удалено");}
 async function quickDeleteDay(date){const cnt=DB.logs.filter(l=>l.date===date).length;
@@ -921,7 +924,7 @@ async function deleteDaySelected(){if(!daySelectedSet.size)return;
   const ids=[...daySelectedSet];
   DB.logs=DB.logs.filter(l=>!(l.date===date&&ids.includes(l.machineId)));
   const plan=DB.dayPlans[date];
-  if(plan&&plan.order){plan.order=plan.order.filter(x=>!ids.includes(x));if(!plan.order.length)delete DB.dayPlans[date];}
+  if(plan&&plan.order){plan.order=plan.order.map(x=>ids.includes(x)?null:x);if(!plan.order.some(Boolean))delete DB.dayPlans[date];}
   daySelectMode=false;daySelectedSet=new Set();
   saveMeta();renderLog();renderStatsBody();
   if(DB.logs.some(l=>l.date===date)||DB.dayPlans[date])daySheet(date);else dismiss();
@@ -929,8 +932,9 @@ async function deleteDaySelected(){if(!daySelectedSet.size)return;
 function daySheet(date){const items=DB.logs.filter(l=>l.date===date);const byM={};items.forEach(l=>{(byM[l.machineId]=byM[l.machineId]||[]).push(l);});
   if(daySelectDate!==date){daySelectMode=false;daySelectedSet=new Set();}
   daySelectDate=date;
-  const plan=DB.dayPlans[date];const validOrder=plan&&plan.order?plan.order.filter(id=>machineById(id)):[];
-  const orderSet=new Set(validOrder);
+  const plan=DB.dayPlans[date];
+  const orderPairs=plan&&plan.order?pairsFromList(plan.order,false):[];
+  const orderSet=new Set();orderPairs.forEach(p=>{if(p.a)orderSet.add(p.a);if(p.b)orderSet.add(p.b);});
   const extraIds=Object.keys(byM).filter(id=>!orderSet.has(id));
   function rowHtml(id){const m=machineById(id);
     const sets=byM[id]?byM[id].map(l=>logLineStr(m,l)).join("  ·  "):"";
@@ -941,16 +945,18 @@ function daySheet(date){const items=DB.logs.filter(l=>l.date===date);const byM={
       <div class="nm">${esc(m?m.name:"—")}${m&&m.group?`<span class="gtag">${esc(m.group)}</span>`:""}<small>${sets||"пока не записано"}</small></div>
       ${daySelectMode?"":'<div style="color:var(--muted);font-size:20px">›</div>'}</div></div>`;}
   let planBlock="";
-  if(validOrder.length){
+  if(orderPairs.length){
     let rows="";
     if(plan.superset){
-      for(let i=0;i<validOrder.length;i+=2){const pairNum=i/2+1;const bId=validOrder[i+1];
-        rows+=`<div class="pairhead">Пара ${pairNum}${bId?"":" (одиночное)"}</div>${rowHtml(validOrder[i])}${bId?rowHtml(bId):""}`;}
-    } else { rows=validOrder.map(rowHtml).join(""); }
+      orderPairs.forEach(p=>{rows+=`<div class="pairhead">Пара ${p.pairNum}${p.single?" (одиночное)":""}</div>${p.a?rowHtml(p.a):""}${p.b?rowHtml(p.b):""}`;});
+    } else {
+      const flatIds=(plan.order||[]).filter(id=>id&&machineById(id));
+      rows=flatIds.map(rowHtml).join("");
+    }
     planBlock=`<div class="h3sub" style="margin:14px 0 8px">📋 ${esc(plan.name)}${plan.rounds?` · ${plan.rounds} круга`:""}</div>${rows}`;
   }
-  const extraBlock=extraIds.length?`${validOrder.length?'<div class="h3sub" style="margin:16px 0 8px">Остальное</div>':""}${extraIds.map(rowHtml).join("")}`:"";
-  const hasAny=validOrder.length||extraIds.length;
+  const extraBlock=extraIds.length?`${orderPairs.length?'<div class="h3sub" style="margin:16px 0 8px">Остальное</div>':""}${extraIds.map(rowHtml).join("")}`:"";
+  const hasAny=orderPairs.length||extraIds.length;
   const selectBtn=hasAny?`<button class="btn ghost mini" style="margin-bottom:8px" onclick="toggleDaySelectMode('${date}')">${daySelectMode?"Отмена":"☑ Выбрать несколько"}</button>`:"";
   const deleteBar=daySelectMode&&daySelectedSet.size?`<button class="btn danger" style="margin-top:12px" onclick="deleteDaySelected()">Удалить выбранное (${daySelectedSet.size})</button>`:"";
   openSheet(`<div class="grip"></div><div class="shhead"><h3>Тренировка</h3><button class="closeb" onclick="dismiss()">✕</button></div>
@@ -1070,50 +1076,69 @@ function saveCell(){document.querySelectorAll("#setlines .setline").forEach(line
 /* ── шаблоны тренировок ── */
 function renderTemplates(){const box=document.getElementById("template-list");if(!box)return;
   if(!DB.templates.length){box.innerHTML=`<div class="empty">Пока нет шаблонов. Заведи «День ног» или «Спина+бицепс» — и заводить упражнения заново не придётся.</div>`;return;}
-  box.innerHTML=DB.templates.map(t=>{const valid=(t.items||[]).filter(it=>machineById(it.exerciseId));
+  box.innerHTML=DB.templates.map(t=>{const valid=(t.items||[]).filter(it=>it&&machineById(it.exerciseId));
     return `<div class="mblk" data-tplid="${t.id}"><div class="mh" onclick="openTemplateEditor('${t.id}')">
       <div class="thumb ph">▤</div><div class="nm">${esc(t.name)}<small>${valid.length} упражнений</small></div></div></div>`;}).join("");}
-let editTemplateId=null,draftTplExercises=[],draftTplData={};
+let editTemplateId=null,draftTplPairs=[];
+// Пары шаблона хранятся ЯВНО как [id1, id2|null][] — удаление одного упражнения
+// трогает только его собственную пару, остальные пары не пересчитываются заново.
+function tplThumb(m){return m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">▤</div>`;}
 function renderTplPicklist(){
   let body="";
-  if(draftTplExercises.length){
+  if(draftTplPairs.length){
     body+=`<div class="pgh">Выбранные — порядок пар</div>`;
-    for(let i=0;i<draftTplExercises.length;i+=2){
-      const pairNum=i/2+1;const isLast=i===draftTplExercises.length-1&&draftTplExercises.length%2===1;
-      body+=`<div class="pairhead">Пара ${pairNum}${isLast?" (одиночное)":""}</div>`;
-      [draftTplExercises[i],draftTplExercises[i+1]].filter(Boolean).forEach(mid=>{
+    draftTplPairs.forEach((pair,idx)=>{
+      const pairNum=idx+1;const isSingle=!pair[0]||!pair[1];
+      body+=`<div class="pairhead">Пара ${pairNum}${isSingle?" (одиночное)":""}</div>`;
+      [pair[0],pair[1]].filter(Boolean).forEach(mid=>{
         const m=machineById(mid);if(!m)return;
-        const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">▤</div>`;
         body+=`<div class="pitem" style="cursor:pointer;background:var(--accent-soft);border-color:var(--accent)" onclick="toggleTplExercise('${m.id}')">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0">${thumb}<span>${esc(m.name)}</span></div>
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">${tplThumb(m)}<span>${esc(m.name)}</span></div>
           <span style="color:var(--down);font-weight:800;font-size:18px;flex:0 0 auto">✕</span></div>`;});
-    }
+    });
     body+=`<div class="pgh" style="margin-top:16px">Добавить в шаблон</div>`;
   }
-  const selSet=new Set(draftTplExercises);
+  const selSet=new Set();draftTplPairs.forEach(p=>{if(p[0])selSet.add(p[0]);if(p[1])selSet.add(p[1]);});
   const byG={};DB.machines.forEach(m=>{if(!selSet.has(m.id))(byG[m.group||"Другое"]=byG[m.group||"Другое"]||[]).push(m);});
   GROUPS.forEach(g=>{if(!byG[g])return;body+=`<div class="pgh">${g}</div>`+byG[g].map(m=>{
-    const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px" src="${IMG[m.imgs[0]]}" onclick="event.stopPropagation();openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px" onclick="event.stopPropagation();openMachine('${m.id}')">▤</div>`;
     return `<div class="pitem" style="cursor:pointer" onclick="toggleTplExercise('${m.id}')">
-      <div style="display:flex;align-items:center;gap:10px;min-width:0">${thumb}<span>${esc(m.name)}</span></div>
+      <div style="display:flex;align-items:center;gap:10px;min-width:0">${tplThumb(m)}<span>${esc(m.name)}</span></div>
       <span style="color:var(--accent);font-weight:800;font-size:18px;flex:0 0 auto">➕</span></div>`;}).join("");});
   const el=document.getElementById("tpl-picklist");if(el)el.innerHTML=body;}
 
 function openTemplateEditor(id){editTemplateId=id;const t=id?DB.templates.find(x=>x.id===id):null;
-  draftTplExercises=t?(t.items||[]).map(it=>it.exerciseId):[];
-  draftTplData={};
+  const raw=t?(t.items||[]):[];
+  draftTplPairs=[];
+  for(let i=0;i<raw.length;i+=2){
+    const a=raw[i]?raw[i].exerciseId:null;const b=raw[i+1]?raw[i+1].exerciseId:null;
+    if(a||b)draftTplPairs.push([a,b]);
+  }
   openSheet(`<div class="grip"></div><div class="shhead"><h3>${t?"Шаблон":"Новый шаблон"}</h3><button class="closeb" onclick="dismiss()">✕</button></div>
-    <div class="h3sub">Отмечай упражнения — они сами объединятся в пары по порядку (1+2 — Пара 1, 3+4 — Пара 2 и т.д.)</div>
+    <div class="h3sub">Тап по упражнению — добавляет новую пару или дополняет незакрытую. Тап по ✕ у выбранного — убирает только его, остальные пары не трогает.</div>
     <div class="field2"><label>Название</label><input id="f-tpl-name" value="${t?esc(t.name):""}" placeholder="День А"></div>
     <div class="picklist" id="tpl-picklist"></div>
     <div class="row" style="margin-top:12px">${t?`<button class="btn danger" onclick="deleteTemplate('${t.id}')">Удалить</button>`:""}<button class="btn primary" onclick="saveTemplate()">Сохранить</button></div>`);
   renderTplPicklist();}
-function toggleTplExercise(id){const i=draftTplExercises.indexOf(id);
-  if(i>=0){draftTplExercises.splice(i,1);}else{draftTplExercises.push(id);}
+function toggleTplExercise(id){
+  const idx=draftTplPairs.findIndex(p=>p[0]===id||p[1]===id);
+  if(idx>=0){
+    const pair=draftTplPairs[idx];
+    if(pair[0]===id)pair[0]=null;else pair[1]=null;
+    if(!pair[0]&&pair[1]){pair[0]=pair[1];pair[1]=null;}
+    if(!pair[0]&&!pair[1])draftTplPairs.splice(idx,1);
+  } else {
+    const openIdx=draftTplPairs.findIndex(p=>p[0]&&!p[1]);
+    if(openIdx>=0)draftTplPairs[openIdx][1]=id;
+    else draftTplPairs.push([id,null]);
+  }
   renderTplPicklist();}
 function saveTemplate(){const name=document.getElementById("f-tpl-name").value.trim();if(!name){flash("Введи название");return;}
-  if(!draftTplExercises.length){flash("Отметь хотя бы одно упражнение");return;}
-  const items=draftTplExercises.map(id=>({exerciseId:id,sets:null,reps:null,weight:null}));
+  if(!draftTplPairs.length){flash("Отметь хотя бы одно упражнение");return;}
+  const items=[];
+  draftTplPairs.forEach(p=>{
+    items.push(p[0]?{exerciseId:p[0],sets:null,reps:null,weight:null}:null);
+    items.push(p[1]?{exerciseId:p[1],sets:null,reps:null,weight:null}:null);
+  });
   const data={name,rounds:null,superset:true,items};
   if(editTemplateId){Object.assign(DB.templates.find(x=>x.id===editTemplateId),data);}
   else DB.templates.push({id:uid(),...data});
@@ -1121,20 +1146,27 @@ function saveTemplate(){const name=document.getElementById("f-tpl-name").value.t
 async function deleteTemplate(id){if(!(await askConfirm("Удалить шаблон?","Удалить шаблон")))return;
   DB.templates=DB.templates.filter(t=>t.id!==id);saveMeta();dismiss();renderTemplates();flash("Удалено");}
 function lastLogFor(machineId){const items=DB.logs.filter(l=>l.machineId===machineId).sort((a,b)=>a.date<b.date?1:-1);return items[0]||null;}
-function tplPreviewRow(it){const m=machineById(it.exerciseId);if(!m)return"";
-  const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:40px;height:40px" src="${IMG[m.imgs[0]]}" onclick="openMachine('${m.id}')">`:`<div class="thumb ph" style="width:40px;height:40px" onclick="openMachine('${m.id}')">▤</div>`;
-  return `<div class="field2"><div style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:15px;margin-bottom:8px" onclick="openMachine('${m.id}')">${thumb}<span>${esc(m.name)}</span></div>
-      <div class="setline" data-mid="${it.exerciseId}"><input type="number" class="ts" value="${it.sets}" placeholder="подх">
-      <input type="number" class="tr" value="${it.reps}" placeholder="повт">
-      <input type="number" step="0.5" class="tw" value="${it.weight??''}" placeholder="вес"></div></div>`;}
+// Считает пары из "плоского" списка (объекты {exerciseId} из t.items ИЛИ голые id из dayPlans.order),
+// не отбрасывая null-заглушки ДО группировки — иначе пары съезжают.
+function pairsFromList(list,isObjArray){
+  const pairs=[];let pairNum=0;
+  for(let i=0;i<list.length;i+=2){
+    const rawA=list[i],rawB=list[i+1];
+    const aId=isObjArray?(rawA?rawA.exerciseId:null):rawA;
+    const bId=isObjArray?(rawB?rawB.exerciseId:null):rawB;
+    const aOk=aId&&machineById(aId),bOk=bId&&machineById(bId);
+    if(!aOk&&!bOk)continue;
+    pairNum++;
+    pairs.push({pairNum,a:aOk?aId:null,b:bOk?bId:null,single:!(aOk&&bOk)});
+  }
+  return pairs;}
 function openTemplateRun(id){const t=DB.templates.find(x=>x.id===id);if(!t)return;
-  const items=(t.items||[]).filter(it=>machineById(it.exerciseId));
-  function pairRow(it){const m=machineById(it.exerciseId);if(!m)return"";
+  function pairRow(mid){const m=machineById(mid);if(!m)return"";
     const thumb=m.imgs&&m.imgs.length?`<img class="thumb" style="width:44px;height:44px;cursor:pointer" src="${IMG[m.imgs[0]]}" onclick="openMachine('${m.id}')">`:`<div class="thumb ph" style="width:44px;height:44px;cursor:pointer" onclick="openMachine('${m.id}')">▤</div>`;
     return `<div class="mblk" style="margin-bottom:6px"><div class="mh" onclick="openMachine('${m.id}')">${thumb}<div class="nm">${esc(m.name)}</div></div></div>`;}
+  const pairs=pairsFromList(t.items||[],true);
   let rows="";
-  for(let i=0;i<items.length;i+=2){const pairNum=i/2+1;
-    rows+=`<div class="pairhead">Пара ${pairNum}${items[i+1]?"":"  (одиночное)"}</div>`+pairRow(items[i])+(items[i+1]?pairRow(items[i+1]):"");}
+  pairs.forEach(p=>{rows+=`<div class="pairhead">Пара ${p.pairNum}${p.single?"  (одиночное)":""}</div>`+(p.a?pairRow(p.a):"")+(p.b?pairRow(p.b):"");});
   openSheet(`<div class="grip"></div><div class="shhead"><h3>${esc(t.name)}</h3><button class="closeb" onclick="dismiss()">✕</button></div>
     <div class="h3sub">Программа на сегодня. Тап по упражнению — открыть технику. Внизу — записать план в журнал.</div>
     <div class="field2"><label>Дата</label><input type="hidden" id="tpl-date" value="${today()}"><button type="button" class="picksel" id="tpl-date-btn" onclick="openDatePicker('tpl-date')"><span>${ruDate(today())}</span><span class="ch">📅</span></button></div>
@@ -1142,15 +1174,17 @@ function openTemplateRun(id){const t=DB.templates.find(x=>x.id===id);if(!t)retur
     <button class="btn primary" style="margin-top:8px" onclick="applyTemplateNow('${t.id}')">Записать план в журнал</button>`);}
 function applyTemplateNow(id){const t=DB.templates.find(x=>x.id===id);if(!t)return;
   const date=(document.getElementById("tpl-date")||{}).value||today();
-  const items=(t.items||[]).filter(it=>machineById(it.exerciseId));
-  const mids=new Set(items.map(it=>it.exerciseId));
+  const raw=t.items||[];
+  const validIds=raw.filter(it=>it&&machineById(it.exerciseId)).map(it=>it.exerciseId);
+  const mids=new Set(validIds);
   DB.logs=DB.logs.filter(l=>!(mids.has(l.machineId)&&l.date===date));
-  items.forEach(it=>{
-    const m=machineById(it.exerciseId);const mtype=m&&m.mtype||"strength";
-    if(mtype==="strength")DB.logs.push({id:uid(),date,machineId:it.exerciseId,weight:null,reps:null,sets:null});
+  validIds.forEach(eid=>{
+    const m=machineById(eid);const mtype=m&&m.mtype||"strength";
+    if(mtype==="strength")DB.logs.push({id:uid(),date,machineId:eid,weight:null,reps:null,sets:null});
   });
-  DB.dayPlans[date]={name:t.name,superset:t.superset,rounds:t.rounds,order:items.map(it=>it.exerciseId)};
-  saveMeta();renderLog();renderStatsBody();dismiss();flash(`Записано на ${ruDate(date)}: ${items.length} упражнений 💪`);}
+  const order=raw.map(it=>it?it.exerciseId:null);
+  DB.dayPlans[date]={name:t.name,superset:t.superset,rounds:t.rounds,order};
+  saveMeta();renderLog();renderStatsBody();dismiss();flash(`Записано на ${ruDate(date)}: ${validIds.length} упражнений 💪`);}
 
 function buildBigChartSVG(machineId){
   const m=machineById(machineId);
@@ -1183,10 +1217,14 @@ function openExerciseChart(machineId){const m=machineById(machineId);
 /* ── упражнения ── */
 function renderMachineList(){const box=document.getElementById("machine-list");
   if(!DB.machines.length){box.innerHTML=`<div class="empty">Пока ни одного упражнения.<br>Нажми «+ Новое упражнение».</div>`;return;}
-  box.innerHTML=DB.machines.map(m=>{
-    const th=m.imgs&&m.imgs.length?`<img class="th" src="${IMG[m.imgs[0]]}">`:`<div class="th ph">🏋️</div>`;
+  function card(m){const th=m.imgs&&m.imgs.length?`<img class="th" src="${IMG[m.imgs[0]]}">`:`<div class="th ph">🏋️</div>`;
     return `<div class="mcard" data-id="${m.id}" onclick="openMachine('${m.id}')">${th}<div class="nm">${esc(m.name)}${m.group?`<span class="gtag">${esc(m.group)}</span>`:""}${m.short?`<small>${esc(m.short)}</small>`:""}</div>
-      <div style="color:var(--muted);font-size:20px">›</div></div>`;}).join("");}
+      <div style="color:var(--muted);font-size:20px">›</div></div>`;}
+  const byG={};DB.machines.forEach(m=>{(byG[m.group||"Другое"]=byG[m.group||"Другое"]||[]).push(m);});
+  let body="";GROUPS.forEach(g=>{if(!byG[g])return;body+=`<div class="pgh">${g}</div>`+byG[g].map(card).join("");});
+  // На всякий случай — если у кого-то группа не входит в GROUPS
+  const known=new Set(GROUPS);Object.keys(byG).forEach(g=>{if(!known.has(g))body+=`<div class="pgh">${esc(g)}</div>`+byG[g].map(card).join("");});
+  box.innerHTML=body;}
 let editId=null,draftImgs=[];
 function openMachine(id){editId=id;const m=id?machineById(id):null;draftImgs=m?m.imgs.slice():[];
   const opts=GROUPS.map(g=>`<option ${m&&m.group===g?"selected":""}>${g}</option>`).join("");
@@ -1229,7 +1267,7 @@ async function deleteMachine(id){const cnt=DB.logs.filter(l=>l.machineId===id).l
   if(!(await askConfirm(`Удалить упражнение?${cnt?` Записей в журнале: ${cnt} — они тоже уйдут.`:""}`,"Удалить упражнение")))return;
   const m=machineById(id);if(m)for(const im of m.imgs){await idbDel(im);delete IMG[im];}
   DB.machines=DB.machines.filter(x=>x.id!==id);DB.logs=DB.logs.filter(l=>l.machineId!==id);if(selMachineId===id)selMachineId=null;
-  DB.templates.forEach(t=>{if(t.items)t.items=t.items.filter(it=>it.exerciseId!==id);});
+  DB.templates.forEach(t=>{if(t.items)t.items=t.items.map(it=>(it&&it.exerciseId===id)?null:it);});
   for(const d in DB.dayPlans){DB.dayPlans[d].order=(DB.dayPlans[d].order||[]).filter(x=>x!==id);if(!DB.dayPlans[d].order.length)delete DB.dayPlans[d];}
   saveMeta();dismiss();refreshAddForm();renderMachineList();renderLog();renderStatsBody();renderTemplates();flash("Удалено");}
 function zoom(imgId){document.getElementById("viewer-img").src=IMG[imgId]||"";document.getElementById("viewer").classList.add("on");
